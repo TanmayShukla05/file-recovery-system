@@ -1,0 +1,8 @@
+flask
+gunicorn
+numpy
+Pillow
+PyMuPDF
+opencv-python-headless
+librosa
+soundfile

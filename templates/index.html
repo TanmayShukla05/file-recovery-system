@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hopfield Media Retrieval</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: monospace;
+            max-width: 700px;
+            margin: 20px auto;
+            padding: 0 20px;
+            line-height: 1.6;
+        }
+        h1 { font-size: 1.4em; font-weight: normal; margin-bottom: 16px; }
+        h2 { font-size: 1.1em; font-weight: bold; margin: 20px 0 8px; }
+        form { margin: 8px 0; }
+        label { display: inline; }
+        input[type="file"] { margin: 4px 0; }
+        input[type="number"] { width: 60px; padding: 2px 4px; font-family: monospace; }
+        button {
+            padding: 6px 14px;
+            margin: 4px 2px;
+            font-family: monospace;
+            cursor: pointer;
+        }
+        hr { margin: 30px 0; border: none; border-top: 1px solid #ccc; }
+        .ok { color: green; }
+        .err { color: red; }
+        .flash-msg { margin: 3px 0; font-size: 0.9em; }
+        .file-entry { padding: 2px 0; font-size: 0.9em; color: green; }
+        .result-box {
+            margin-top: 12px;
+            padding: 12px;
+            border: 1px solid #ccc;
+        }
+        .result-box p { margin: 4px 0; }
+        a { color: blue; }
+    </style>
+</head>
+<body>
+
+<h1>Hopfield Media Retrieval</h1>
+
+<!-- Flash messages -->
+{% with messages = get_flashed_messages(with_categories=true) %}
+{% if messages %}
+{% for category, message in messages %}
+<p class="flash-msg {{ category }}">{{ message }}</p>
+{% endfor %}
+{% endif %}
+{% endwith %}
+
+<!-- ═══════════════ CONFIG ═══════════════ -->
+<h2>Pattern Size</h2>
+<form action="/config" method="post">
+    <label>Side length:
+        <input type="number" name="side" value="{{ pattern_side }}" min="8" max="256">
+    </label>
+    <span style="color:#666; font-size:0.85em;">
+        (pattern = {{ pattern_side }}×{{ pattern_side }} = {{ pattern_side * pattern_side }})
+    </span>
+    <br>
+    <button type="submit">Set</button>
+</form>
+<p style="color:#666; font-size:0.85em;">Changing this clears the store.</p>
+
+<hr>
+
+<!-- ═══════════════ STORE ═══════════════ -->
+<h2>1. Store Files</h2>
+
+<form action="/store" method="post" enctype="multipart/form-data">
+    <input type="file" name="files" multiple><br>
+    <button type="submit">Store</button>
+</form>
+<form action="/clear" method="post" style="display:inline;">
+    <button type="submit">Clear All</button>
+</form>
+
+{% if entries %}
+<p style="margin-top:10px;">{{ entries|length }} file(s) stored:</p>
+{% for e in entries %}
+<p class="file-entry">✓ {{ e.name }}  [{{ e.type }}]</p>
+{% endfor %}
+<br>
+<a href="/download_memory">⬇ Download Memory File (hopfield_memory.json)</a>
+{% endif %}
+
+<hr>
+
+<!-- ═══════════════ RETRIEVE ═══════════════ -->
+<h2>2. Retrieve File</h2>
+
+<form action="/retrieve" method="post" enctype="multipart/form-data">
+    <label>Memory file (.json):</label><br>
+    <input type="file" name="memory" accept=".json"><br><br>
+    <label>Damaged / query file:</label><br>
+    <input type="file" name="query"><br><br>
+    <button type="submit">Retrieve</button>
+</form>
+
+{% if result %}
+<div class="result-box">
+    <p><strong>Matched file:</strong> {{ result.name }}</p>
+    <p><strong>Type:</strong> {{ result.type }}</p>
+    <p><strong>Overlap:</strong> {{ result.overlap }}</p>
+    <br>
+    <a href="/download_retrieved">⬇ Download Retrieved File</a>
+</div>
+{% endif %}
+
+</body>
+</html>
