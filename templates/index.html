@@ -65,15 +65,18 @@
 <!-- Instructions Box -->
 <div class="info-box">
     <h2>What does this do?</h2>
-    <p>This tool uses a Hopfield Network to "memorize" your files. If a file gets damaged or corrupted later, you can upload the damaged version, and the network will try to find and return the original, undamaged file.</p>
-    
+    <p>This tool uses a Hopfield Network to memorize the files you upload. Later, if a file is accidentally edited, partially corrupted, overwritten, or otherwise altered, you can upload that modified version and the network will try to recognize it and recover the closest matching original file from its memory.</p>
+
     <h2>How to use it:</h2>
     <ol>
-        <li><strong>Store Files:</strong> Upload the good, undamaged files you want to memorize and click "Store".</li>
+        <li><strong>Store Files:</strong> Upload the original files you want the network to memorize and click "Store".</li>
+
         <li><strong>Download Memory File:</strong> Click "Download Memory File" and save the <code>hopfield_memory.json</code> file to your computer.<br>
-        <em style="color:red;">Important:</em> The free server deletes your stored files after 15 minutes of inactivity. You MUST download the memory file to keep your data!</li>
-        <li><strong>Retrieve Later:</strong> When you have a damaged file, come back to this page. Upload your saved <code>hopfield_memory.json</code> file and the damaged file, then click "Retrieve".</li>
-        <li><strong>Download Result:</strong> If a match is found, click "Download Retrieved File" to get the original file back.</li>
+        <em style="color:red;">Important:</em> The server only keeps data temporarily and may delete stored files after inactivity. Downloading the memory file ensures you can use the tool later.</li>
+
+        <li><strong>Retrieve Later:</strong> If a file becomes corrupted, accidentally modified, partially lost, or otherwise differs from the original, return to this page. Upload both your saved <code>hopfield_memory.json</code> file and the altered file, then click "Retrieve".</li>
+
+        <li><strong>Download Result:</strong> If the network finds a match, you can download the recovered version of the original file.</li>
     </ol>
 </div>
 
