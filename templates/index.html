@@ -6,83 +6,142 @@
     <title>File Recovery System</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
+
         body {
             font-family: monospace;
-            max-width: 1050px; /* Increased width to fit two columns */
+            max-width: 1050px;
             margin: 20px auto;
             padding: 0 20px;
             line-height: 1.6;
         }
-        h1 { font-size: 1.4em; font-weight: normal; margin-bottom: 20px; text-align: center; }
-        h2 { font-size: 1.1em; font-weight: bold; margin: 20px 0 8px; }
+
+        h1 {
+            font-size: 1.4em;
+            font-weight: normal;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        h2 {
+            font-size: 1.1em;
+            font-weight: bold;
+            margin: 20px 0 8px;
+        }
+
         form { margin: 8px 0; }
         label { display: inline; }
         input[type="file"] { margin: 4px 0; }
-        input[type="number"] { width: 60px; padding: 2px 4px; font-family: monospace; }
+        input[type="number"] {
+            width: 60px;
+            padding: 2px 4px;
+            font-family: monospace;
+        }
+
         button {
             padding: 6px 14px;
             margin: 4px 2px;
             font-family: monospace;
             cursor: pointer;
         }
-        hr { margin: 30px 0; border: none; border-top: 1px solid #ccc; }
+
+        hr {
+            margin: 30px 0;
+            border: none;
+            border-top: 1px solid #ccc;
+        }
+
         .ok { color: green; }
         .err { color: red; }
-        .flash-msg { margin: 3px 0; font-size: 0.9em; }
-        .file-entry { padding: 2px 0; font-size: 0.9em; color: green; }
+
+        .flash-msg {
+            margin: 3px 0;
+            font-size: 0.9em;
+        }
+
+        .file-entry {
+            padding: 2px 0;
+            font-size: 0.9em;
+            color: green;
+        }
+
         .result-box {
             margin-top: 12px;
             padding: 12px;
             border: 1px solid #ccc;
         }
+
         .result-box p { margin: 4px 0; }
+
         a { color: blue; }
-        
-        /* Layout for side-by-side */
+
+        /* Layout */
         .container {
             display: flex;
             gap: 40px;
             align-items: flex-start;
         }
-        
+
         .left-col {
-            flex: 0 0 42%; /* Takes up 42% of the width */
-        }
-        
-        .right-col {
-            flex: 1; /* Takes up the remaining space */
+            flex: 0 0 42%;
         }
 
-        /* Styles for the instructions box */
+        .right-col {
+            flex: 1;
+        }
+
+        /* Instructions box */
         .info-box {
             background: #f4f4f4;
             padding: 15px;
             border: 1px solid #ddd;
-            position: sticky; /* Makes instructions stay visible when scrolling right side */
+            position: sticky;
             top: 20px;
         }
+
         .info-box h2 {
             margin-top: 0;
             margin-bottom: 5px;
         }
-        .info-box ol, .info-box ul {
+
+        .info-box ol,
+        .info-box ul {
             margin-left: 20px;
             margin-top: 5px;
         }
+
         .info-box li {
             margin-bottom: 8px;
         }
 
-        /* Stack columns on small screens (mobile) */
+        /* New stats box */
+        .stats-box {
+            background: #fafafa;
+            border: 1px solid #ddd;
+            padding: 12px;
+            margin-top: 10px;
+        }
+
+        .stats-box p {
+            margin: 4px 0;
+        }
+
+        .small-note {
+            color: #666;
+            font-size: 0.85em;
+        }
+
+        /* Mobile */
         @media (max-width: 768px) {
             .container {
                 flex-direction: column;
             }
+
             .left-col {
                 flex: 1 1 100%;
             }
+
             .info-box {
-                position: static; /* Disable sticky on mobile */
+                position: static;
             }
         }
     </style>
@@ -123,7 +182,7 @@
 
     <!-- RIGHT COLUMN: Functions -->
     <div class="right-col">
-        
+
         <!-- Flash messages -->
         {% with messages = get_flashed_messages() %}
         {% if messages %}
@@ -133,29 +192,38 @@
         {% endif %}
         {% endwith %}
 
-        <!-- ═══════════════ CONFIG ═══════════════ -->
+        <!-- Pattern Size -->
         <h2>Pattern Size</h2>
         <form action="/config" method="post">
             <label>Side length:
-                <input type="number" name="side" value="{{ pattern_side }}" min="8" max="256">
+                <input type="number" id="sideLengthInput" name="side" value="{{ pattern_side }}" min="8" max="256">
             </label>
             <span style="color:#666; font-size:0.85em;">
-                (pattern = {{ pattern_side }}x{{ pattern_side }} = {{ pattern_side * pattern_side }})
+                (pattern = <span id="patternSizeText">{{ pattern_side }}x{{ pattern_side }} = {{ pattern_side * pattern_side }}</span>)
             </span>
             <br>
             <button type="submit">Set</button>
         </form>
         <p style="color:#666; font-size:0.85em;">Changing this clears the store.</p>
 
+        <div class="stats-box">
+            <p><strong>Estimated memory size per file:</strong> <span id="estimatedMemorySize">-</span></p>
+            <p><strong>Recommended max files:</strong> <span id="recommendedMaxFiles">-</span></p>
+            <p class="small-note">
+                This is only an estimate for the stored pattern data. The actual memory file will be larger because it also contains the original file data.
+            </p>
+        </div>
+
         <hr>
 
-        <!-- ═══════════════ STORE ═══════════════ -->
+        <!-- Store Files -->
         <h2>1. Store Files</h2>
 
         <form action="/store" method="post" enctype="multipart/form-data">
             <input type="file" name="files" multiple><br>
             <button type="submit">Store</button>
         </form>
+
         <form action="/clear" method="post" style="display:inline;">
             <button type="submit">Clear All</button>
         </form>
@@ -171,14 +239,16 @@
 
         <hr>
 
-        <!-- ═══════════════ RETRIEVE ═══════════════ -->
+        <!-- Retrieve File -->
         <h2>2. Retrieve File</h2>
 
         <form action="/retrieve" method="post" enctype="multipart/form-data">
             <label>Upload memory file (.json):</label><br>
             <input type="file" name="memory" accept=".json"><br><br>
+
             <label>Upload damaged / query file:</label><br>
             <input type="file" name="query"><br><br>
+
             <button type="submit">Retrieve</button>
         </form>
 
@@ -194,6 +264,40 @@
 
     </div>
 </div>
+
+<script>
+    function formatBytes(bytes) {
+        if (bytes < 1024) return bytes + " B";
+        if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
+        return (bytes / (1024 * 1024)).toFixed(2) + " MB";
+    }
+
+    function updatePatternStats() {
+        const input = document.getElementById("sideLengthInput");
+        const side = Math.max(8, Math.min(256, parseInt(input.value) || 64));
+        const patternSize = side * side;
+
+        // Rough estimate for JSON pattern storage only
+        const estimatedPatternBytes = patternSize * 4;
+
+        // Rough Hopfield capacity estimate
+        const recommendedMax = Math.max(1, Math.floor(patternSize / (2 * Math.log(patternSize))));
+
+        document.getElementById("patternSizeText").textContent =
+            `${side}x${side} = ${patternSize}`;
+
+        document.getElementById("estimatedMemorySize").textContent =
+            `${formatBytes(estimatedPatternBytes)} per stored file`;
+
+        document.getElementById("recommendedMaxFiles").textContent =
+            `${recommendedMax} files (approx.)`;
+    }
+
+    document.addEventListener("DOMContentLoaded", function () {
+        updatePatternStats();
+        document.getElementById("sideLengthInput").addEventListener("input", updatePatternStats);
+    });
+</script>
 
 </body>
 </html>
