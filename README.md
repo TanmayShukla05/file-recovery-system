@@ -1,14 +1,14 @@
 # Hopfield File Recovery System
 
-This is a simple project made using Flask and Hopfield Networks.
+This is a small project made using Flask and Hopfield Networks.
 
-Website Link:
+Website:
 
 https://file-recovery-system.onrender.com/
 
-The project can store different types of files as patterns in a Hopfield Network and later try to recover the original file from a damaged version.
+The website can store files in a Hopfield Network and later retrieve the original file from a damaged or noisy version.
 
-## Files Supported
+## Supported Files
 
 * Images
 * Audio files
@@ -17,51 +17,34 @@ The project can store different types of files as patterns in a Hopfield Network
 
 ## How to Use
 
-### Storing Files
+### Store Files
 
 1. Open the website.
 2. Choose the pattern size.
 3. Upload one or more files.
 4. Click **Store**.
-5. Download the generated memory file.
+5. Download the memory file.
 
-### Retrieving Files
+### Retrieve Files
 
 1. Upload the memory file.
-2. Upload a damaged/noisy version of a stored file.
+2. Upload a damaged version of one of the stored files.
 3. Click **Retrieve**.
 4. Download the recovered file.
 
-## Running Locally
+## Libraries Used
 
-Install the required packages:
-
-```bash
-pip install -r requirements.txt
-```
-
-Run the Flask app:
-
-```bash
-python app.py
-```
-
-Then open:
-
-```text
-http://localhost:5000
-```
-
-## Idea Behind the Project
-
-The project uses a Modern Hopfield Network to store patterns generated from files. When a damaged file is uploaded, the network finds the closest stored pattern and returns the corresponding original file.
-
-## Made Using
-
-* Python
 * Flask
 * NumPy
-* OpenCV
 * Pillow
-* PyMuPDF
+* OpenCV
 * Librosa
+* PyMuPDF
+
+## About the Project
+
+The project uses a Modern Hopfield Network to store binary patterns generated from files. During retrieval, the uploaded query file is converted into a pattern and matched with the stored memories. The closest stored memory is then returned to the user.
+
+## Try it Here
+
+https://file-recovery-system.onrender.com/
