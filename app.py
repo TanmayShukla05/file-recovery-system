@@ -1,311 +1,397 @@
-"""
-Hopfield Media Retrieval — Flask backend.
-All encoding, storage, and retrieval logic runs in Python.
-The HTML template has ZERO JavaScript — pure form submissions.
-"""
-
 import os
 import io
 import json
 import base64
+import math
 import tempfile
 import numpy as np
 from PIL import Image
-from flask import (
-    Flask, render_template, request, send_file,
-    redirect, url_for, flash
-)
+from flask import Flask, render_template, request, send_file, redirect, url_for, flash
 
-# Optional heavy imports — graceful fallback
+# Try to import the extra libraries. If they are not there, we just skip those file types.
 try:
-    import fitz  # PyMuPDF
-except ImportError:
+    import fitz # for pdf
+except:
     fitz = None
 
 try:
-    import cv2
-except ImportError:
+    import cv2 # for video
+except:
     cv2 = None
 
 try:
-    import librosa
-except ImportError:
+    import librosa # for audio
+except:
     librosa = None
 
 
-# ═══════════════════════════════════════════════════════════════
-#  CONFIG
-# ═══════════════════════════════════════════════════════════════
-
-PATTERN_SIDE = 64
-PATTERN_SIZE = PATTERN_SIDE * PATTERN_SIDE   # 4096
-BETA = 8.0
-MAX_ITER = 300
-
-IMAGE_EXTS = {'png', 'jpg', 'jpeg', 'bmp', 'gif', 'webp', 'tiff'}
-AUDIO_EXTS = {'wav', 'mp3', 'ogg', 'flac', 'aac', 'm4a'}
-VIDEO_EXTS = {'mp4', 'avi', 'mov', 'mkv', 'webm'}
-PDF_EXTS   = {'pdf'}
-
-
-# ═══════════════════════════════════════════════════════════════
-#  FLASK APP
-# ═══════════════════════════════════════════════════════════════
-
+# ------------------------------------------------------------------
+# FLASK SETUP
+# ------------------------------------------------------------------
 app = Flask(__name__)
-app.secret_key = 'hopfield-media-retrieval-demo'
-app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50 MB
+app.secret_key = 'supersecretkey'
+# Max upload size 50MB
+app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024
 
 
-# ═══════════════════════════════════════════════════════════════
-#  MODERN HOPFIELD NETWORK  (Dense Associative Memory)
-# ═══════════════════════════════════════════════════════════════
+# ------------------------------------------------------------------
+# GLOBAL VARIABLES (where we store everything in memory)
+# ------------------------------------------------------------------
+PATTERN_SIDE = 64
+PATTERN_SIZE = 64 * 64 # 4096
+BETA = 8.0
 
-class ModernHopfield:
-    """
-    Softmax-attention retrieval.
-    Capacity scales exponentially with pattern size —
-    far beyond the classical 0.138·N limit.
-    """
+# This list will hold the actual patterns (lists of 1 and -1)
+my_stored_patterns = []
 
-    def __init__(self, N, beta=8.0):
-        self.N = N
-        self.beta = beta
-        self.patterns = []
+# This list will hold the file info and the original file data so we can download it later
+my_stored_files = []
 
-    def store(self, pattern):
-        self.patterns.append(np.array(pattern, dtype=np.float64))
-
-    def retrieve(self, query, max_iter=300):
-        K = len(self.patterns)
-        if K == 0:
-            return np.array(query, dtype=np.float64)
-
-        state = np.array(query, dtype=np.float64)
-        Xi = np.array(self.patterns)            # K × N
-
-        for _ in range(max_iter):
-            sim = self.beta * (Xi @ state) / self.N   # K
-            sim -= sim.max()                           # stable softmax
-            w = np.exp(sim)
-            w /= w.sum()
-            h = Xi.T @ w                               # N
-            new_state = np.where(h >= 0, 1.0, -1.0)
-            if np.array_equal(new_state, state):
-                break
-            state = new_state
-
-        return state
-
-    def find_closest(self, pattern):
-        pattern = np.array(pattern, dtype=np.float64)
-        best_idx, best_ov = -1, -1.0
-        for i, p in enumerate(self.patterns):
-            ov = float(np.mean(p == pattern))
-            if ov > best_ov:
-                best_ov = ov
-                best_idx = i
-        return best_idx, best_ov
+# To hold the last result so the user can download it
+last_match = None
 
 
-# ═══════════════════════════════════════════════════════════════
-#  UTILITIES
-# ═══════════════════════════════════════════════════════════════
+# ------------------------------------------------------------------
+# HELPER FUNCTIONS
+# ------------------------------------------------------------------
 
-def downsample(arr, target):
-    """Linearly interpolate 1-D array to exactly `target` elements."""
-    if len(arr) == target:
-        return np.asarray(arr, dtype=np.float64)
-    idx = np.linspace(0, len(arr) - 1, target)
-    return np.interp(idx, np.arange(len(arr)), arr)
-
-
-def binarize(arr):
-    """Normalise to [0,1], threshold at median → ±1."""
-    arr = np.asarray(arr, dtype=np.float64).ravel()
-    mn, mx = arr.min(), arr.max()
-    if mx - mn < 1e-10:
-        return np.ones(len(arr))
-    norm = (arr - mn) / (mx - mn)
-    med = np.median(norm)
-    return np.where(norm >= med, 1.0, -1.0)
-
-
-def detect_type(filename):
-    ext = filename.rsplit('.', 1)[-1].lower() if '.' in filename else ''
-    if ext in IMAGE_EXTS: return 'image'
-    if ext in AUDIO_EXTS: return 'audio'
-    if ext in VIDEO_EXTS: return 'video'
-    if ext in PDF_EXTS:   return 'pdf'
-    return 'unknown'
+def downsample_list(arr, target_size):
+    """Make an array a specific length by averaging nearby points."""
+    if len(arr) == target_size:
+        return arr
+    
+    new_arr = []
+    for i in range(target_size):
+        # find where we are in the old array
+        pos = (i / (target_size - 1)) * (len(arr) - 1)
+        low_idx = int(pos)
+        high_idx = min(low_idx + 1, len(arr) - 1)
+        fraction = pos - low_idx
+        
+        # blend between the two nearest points
+        val = arr[low_idx] * (1 - fraction) + arr[high_idx] * fraction
+        new_arr.append(val)
+        
+    return new_arr
 
 
-# ═══════════════════════════════════════════════════════════════
-#  ENCODERS — each returns a ±1 array of length side²
-# ═══════════════════════════════════════════════════════════════
+def make_binary(arr):
+    """Turn an array of numbers into an array of only 1 and -1."""
+    arr = np.array(arr, dtype=float)
+    
+    # 1. normalize to 0 to 1
+    mn = arr.min()
+    mx = arr.max()
+    if mx - mn < 0.00001:
+        return [1] * len(arr) # everything is the same
+    
+    norm_arr = (arr - mn) / (mx - mn)
+    
+    # 2. find the middle (median)
+    sorted_arr = sorted(norm_arr)
+    middle = sorted_arr[len(sorted_arr) // 2]
+    
+    # 3. if above middle, 1. if below middle, -1.
+    result = []
+    for val in norm_arr:
+        if val >= middle:
+            result.append(1)
+        else:
+            result.append(-1)
+            
+    return result
+
+
+def get_file_type(filename):
+    """Guess the file type from the name."""
+    ext = filename.split('.')[-1].lower()
+    
+    if ext in ['png', 'jpg', 'jpeg', 'bmp', 'gif', 'webp']:
+        return 'image'
+    elif ext in ['wav', 'mp3', 'ogg', 'flac', 'aac', 'm4a']:
+        return 'audio'
+    elif ext in ['mp4', 'avi', 'mov', 'mkv', 'webm']:
+        return 'video'
+    elif ext in ['pdf']:
+        return 'pdf'
+    else:
+        return 'unknown'
+
+
+# ------------------------------------------------------------------
+# ENCODERS (turn files into lists of 1 and -1)
+# ------------------------------------------------------------------
 
 def encode_image(file_bytes, side):
-    img = Image.open(io.BytesIO(file_bytes)).convert('L')
-    img = img.resize((side, side), Image.Resampling.LANCZOS)
-    return binarize(np.array(img).flatten())
+    img = Image.open(io.BytesIO(file_bytes)).convert('L') # L means grayscale
+    img = img.resize((side, side))
+    pixels = list(img.getdata()) # get pixel values as a list
+    return make_binary(pixels)
 
 
 def encode_audio(file_bytes, side):
     if librosa is None:
-        raise RuntimeError("librosa is not installed — cannot encode audio")
-    # Write to temp file so librosa can decode it
-    with tempfile.NamedTemporaryFile(delete=False) as f:
-        f.write(file_bytes)
-        tmp = f.name
+        raise Exception("Audio library not installed on server.")
+    
+    # librosa needs a file path, so we write to a temp file
+    tmp = tempfile.NamedTemporaryFile(delete=False)
+    tmp.write(file_bytes)
+    tmp.close()
+    
     try:
-        y, _ = librosa.load(tmp, sr=22050, duration=10.0)
-        arr = downsample(y, side * side)
-        return binarize(arr)
+        y, sr = librosa.load(tmp.name, sr=22050, duration=10.0)
+        data = downsample_list(list(y), side * side)
+        return make_binary(data)
     finally:
-        os.unlink(tmp)
+        os.unlink(tmp.name) # delete temp file
 
 
 def encode_video(file_bytes, side):
     if cv2 is None:
-        raise RuntimeError("opencv is not installed — cannot encode video")
-    with tempfile.NamedTemporaryFile(suffix='.mp4', delete=False) as f:
-        f.write(file_bytes)
-        tmp = f.name
+        raise Exception("Video library not installed on server.")
+        
+    tmp = tempfile.NamedTemporaryFile(suffix='.mp4', delete=False)
+    tmp.write(file_bytes)
+    tmp.close()
+    
     try:
-        cap = cv2.VideoCapture(tmp)
-        total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-        cap.set(cv2.CAP_PROP_POS_FRAMES, max(total // 2, 0))
+        cap = cv2.VideoCapture(tmp.name)
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        
+        # jump to the middle of the video
+        cap.set(cv2.CAP_PROP_POS_FRAMES, total_frames // 2)
         ret, frame = cap.read()
         cap.release()
+        
         if not ret:
-            raise RuntimeError("Cannot read video frame")
+            raise Exception("Could not read video frame")
+            
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         gray = cv2.resize(gray, (side, side))
-        return binarize(gray.flatten())
+        pixels = list(gray.flatten())
+        return make_binary(pixels)
     finally:
-        os.unlink(tmp)
+        os.unlink(tmp.name)
 
 
 def encode_pdf(file_bytes, side):
     if fitz is None:
-        raise RuntimeError("PyMuPDF is not installed — cannot encode PDF")
+        raise Exception("PDF library not installed on server.")
+        
     doc = fitz.open(stream=file_bytes, filetype="pdf")
     page = doc[0]
-    mat = fitz.Matrix(2, 2)
-    pix = page.get_pixmap(matrix=mat)
+    pix = page.get_pixmap(matrix=fitz.Matrix(2, 2))
     img = Image.open(io.BytesIO(pix.tobytes("png"))).convert('L')
-    img = img.resize((side, side), Image.Resampling.LANCZOS)
+    img = img.resize((side, side))
     doc.close()
-    return binarize(np.array(img).flatten())
+    
+    pixels = list(img.getdata())
+    return make_binary(pixels)
 
 
 def encode_file(filename, file_bytes, side):
-    ftype = detect_type(filename)
-    if ftype == 'image': return encode_image(file_bytes, side), ftype
-    if ftype == 'audio': return encode_audio(file_bytes, side), ftype
-    if ftype == 'video': return encode_video(file_bytes, side), ftype
-    if ftype == 'pdf':   return encode_pdf(file_bytes, side), ftype
-    raise ValueError(f"Unsupported file type: {filename}")
+    """Figure out what kind of file it is and encode it."""
+    ftype = get_file_type(filename)
+    
+    if ftype == 'image':
+        return encode_image(file_bytes, side), ftype
+    elif ftype == 'audio':
+        return encode_audio(file_bytes, side), ftype
+    elif ftype == 'video':
+        return encode_video(file_bytes, side), ftype
+    elif ftype == 'pdf':
+        return encode_pdf(file_bytes, side), ftype
+    else:
+        raise Exception("I don't know how to read this file type.")
 
 
-# ═══════════════════════════════════════════════════════════════
-#  IN-MEMORY STORE
-# ═══════════════════════════════════════════════════════════════
+# ------------------------------------------------------------------
+# HOPFIELD NETWORK LOGIC (Written simply with loops)
+# ------------------------------------------------------------------
 
-class Store:
-    def __init__(self):
-        self.entries = []
-        self.network = ModernHopfield(PATTERN_SIZE, BETA)
+def hopfield_retrieve(query_pattern):
+    """
+    This does the Modern Hopfield retrieval using basic loops.
+    It looks at all stored patterns, compares them to the query,
+    and tries to converge on the closest match.
+    """
+    global my_stored_patterns, BETA, PATTERN_SIZE
+    
+    K = len(my_stored_patterns)
+    if K == 0:
+        return query_pattern
+        
+    N = PATTERN_SIZE
+    state = list(query_pattern) # make a copy
+    
+    # Iterate up to 300 times
+    for step in range(300):
+        changed = False
+        
+        # 1. Calculate similarities (softmax attention)
+        similarities = [0.0] * K
+        for mu in range(K):
+            dot_product = 0
+            for i in range(N):
+                dot_product += my_stored_patterns[mu][i] * state[i]
+            similarities[mu] = BETA * dot_product / N
+            
+        # Stable softmax (subtract max so math.exp doesn't crash)
+        max_sim = max(similarities)
+        weights = [0.0] * K
+        sum_weights = 0.0
+        for mu in range(K):
+            weights[mu] = math.exp(similarities[mu] - max_sim)
+            sum_weights += weights[mu]
+            
+        for mu in range(K):
+            weights[mu] = weights[mu] / sum_weights
+            
+        # 2. Update the state based on weights
+        for i in range(N):
+            h = 0.0
+            for mu in range(K):
+                h += weights[mu] * my_stored_patterns[mu][i]
+                
+            if h >= 0:
+                new_val = 1
+            else:
+                new_val = -1
+                
+            if new_val != state[i]:
+                changed = True
+                state[i] = new_val
+                
+        # If nothing changed, we found a stable memory!
+        if not changed:
+            break
+            
+    return state
 
-    def reset(self):
-        self.entries = []
-        self.network = ModernHopfield(PATTERN_SIZE, BETA)
 
-    def add(self, name, ftype, pattern, original_bytes):
-        b64 = base64.b64encode(original_bytes).decode()
-        self.entries.append({
-            'name': name,
-            'type': ftype,
-            'pattern': pattern.tolist(),
-            'original_b64': b64,
-        })
-        self.network.store(pattern)
+def find_closest_match(retrieved_pattern):
+    """Compare the retrieved pattern to all stored patterns to find the best overlap."""
+    global my_stored_patterns, my_stored_files, PATTERN_SIZE
+    
+    best_index = -1
+    best_overlap = -1.0
+    
+    for i in range(len(my_stored_patterns)):
+        matches = 0
+        for j in range(PATTERN_SIZE):
+            if my_stored_patterns[i][j] == retrieved_pattern[j]:
+                matches += 1
+                
+        overlap = matches / PATTERN_SIZE
+        
+        if overlap > best_overlap:
+            best_overlap = overlap
+            best_index = i
+            
+    return best_index, best_overlap
 
 
-store = Store()
-last_result = None   # holds retrieval result for download
-
-
-# ═══════════════════════════════════════════════════════════════
-#  ROUTES
-# ═══════════════════════════════════════════════════════════════
+# ------------------------------------------------------------------
+# WEBSITE ROUTES
+# ------------------------------------------------------------------
 
 @app.route('/')
 def index():
-    return render_template('index.html',
-                           entries=store.entries,
-                           result=last_result,
+    return render_template('index.html', 
+                           entries=my_stored_files, 
+                           result=last_match, 
                            pattern_side=PATTERN_SIDE)
 
 
 @app.route('/config', methods=['POST'])
-def config_route():
-    global PATTERN_SIDE, PATTERN_SIZE
+def set_config():
+    global PATTERN_SIDE, PATTERN_SIZE, my_stored_patterns, my_stored_files
+    
     try:
         side = int(request.form.get('side', 64))
-        side = max(8, min(256, side))
-    except ValueError:
+        if side < 8: side = 8
+        if side > 256: side = 256
+    except:
         side = 64
+        
     PATTERN_SIDE = side
     PATTERN_SIZE = side * side
-    store.reset()
-    flash(f"Pattern size set to {side}×{side} = {PATTERN_SIZE}. Store cleared.", 'ok')
-    return redirect(url_for('index'))
+    
+    # Reset everything because size changed
+    my_stored_patterns = []
+    my_stored_files = []
+    flash(f"Pattern size set to {PATTERN_SIDE}x{PATTERN_SIDE} = {PATTERN_SIZE}. Store cleared.")
+    return redirect('/')
 
 
 @app.route('/store', methods=['POST'])
-def store_route():
+def store_files():
+    global my_stored_patterns, my_stored_files
+    
     files = request.files.getlist('files')
     if not files:
-        flash("No files selected.", 'err')
-        return redirect(url_for('index'))
-
+        flash("No files selected.")
+        return redirect('/')
+        
     for f in files:
         if not f.filename:
             continue
         try:
             data = f.read()
             pattern, ftype = encode_file(f.filename, data, PATTERN_SIDE)
-            store.add(f.filename, ftype, pattern, data)
-            flash(f"✓ Stored: {f.filename}  [{ftype}]", 'ok')
+            
+            # Save the pattern
+            my_stored_patterns.append(pattern)
+            
+            # Save the original file so we can return it later
+            b64_data = base64.b64encode(data).decode()
+            my_stored_files.append({
+                'name': f.filename,
+                'type': ftype,
+                'original_b64': b64_data
+            })
+            
+            flash(f"Stored: {f.filename} ({ftype})")
         except Exception as e:
-            flash(f"✗ {f.filename}: {e}", 'err')
-
-    return redirect(url_for('index'))
+            flash(f"Error with {f.filename}: {e}")
+            
+    return redirect('/')
 
 
 @app.route('/clear', methods=['POST'])
-def clear_route():
-    global last_result
-    store.reset()
-    last_result = None
-    flash("Store cleared.", 'ok')
-    return redirect(url_for('index'))
+def clear_store():
+    global my_stored_patterns, my_stored_files, last_match
+    my_stored_patterns = []
+    my_stored_files = []
+    last_match = None
+    flash("Store cleared.")
+    return redirect('/')
 
 
 @app.route('/download_memory')
 def download_memory():
-    if not store.entries:
-        flash("Nothing to download — store is empty.", 'err')
-        return redirect(url_for('index'))
-
+    global my_stored_patterns, my_stored_files, PATTERN_SIZE, PATTERN_SIDE, BETA
+    
+    if not my_stored_files:
+        flash("Nothing to download.")
+        return redirect('/')
+        
+    # Build a big dictionary to save as JSON
     payload = {
-        'version': 1,
         'pattern_size': PATTERN_SIZE,
         'pattern_side': PATTERN_SIDE,
         'beta': BETA,
-        'entries': store.entries,
+        'entries': []
     }
+    
+    for i in range(len(my_stored_files)):
+        payload['entries'].append({
+            'name': my_stored_files[i]['name'],
+            'type': my_stored_files[i]['type'],
+            'pattern': my_stored_patterns[i],
+            'original_b64': my_stored_files[i]['original_b64']
+        })
+        
     data = json.dumps(payload).encode()
     return send_file(
         io.BytesIO(data),
@@ -316,80 +402,74 @@ def download_memory():
 
 
 @app.route('/retrieve', methods=['POST'])
-def retrieve_route():
-    global last_result
-
+def retrieve_file():
+    global last_match
+    
     mem_file = request.files.get('memory')
     qry_file = request.files.get('query')
-
+    
     if not mem_file or not mem_file.filename:
-        flash("Upload a memory file (.json).", 'err')
-        return redirect(url_for('index'))
+        flash("Upload a memory file (.json).")
+        return redirect('/')
     if not qry_file or not qry_file.filename:
-        flash("Upload a query file.", 'err')
-        return redirect(url_for('index'))
-
+        flash("Upload a query file.")
+        return redirect('/')
+        
     try:
-        # ── Load memory ──
+        # 1. Load memory
         mem = json.loads(mem_file.read())
         entries = mem['entries']
         if not entries:
-            flash("Memory file has no entries.", 'err')
-            return redirect(url_for('index'))
-
-        N    = mem['pattern_size']
-        side = mem.get('pattern_side', int(round(N ** 0.5)))
+            flash("Memory file is empty.")
+            return redirect('/')
+            
+        N = mem['pattern_size']
+        side = mem.get('pattern_side', int(math.sqrt(N)))
         beta = mem.get('beta', BETA)
-
-        # ── Rebuild network ──
-        net = ModernHopfield(N, beta)
-        for e in entries:
-            net.store(np.array(e['pattern']))
-
-        # ── Encode query using memory's pattern side ──
+        
+        # Put patterns back into global list temporarily
+        my_stored_patterns = [e['pattern'] for e in entries]
+        
+        # 2. Encode the damaged query file
         qdata = qry_file.read()
         qpattern, _ = encode_file(qry_file.filename, qdata, side)
-
-        # ── Retrieve ──
-        retrieved = net.retrieve(qpattern, MAX_ITER)
-        idx, overlap = net.find_closest(retrieved)
-
+        
+        # 3. Run Hopfield retrieval
+        retrieved = hopfield_retrieve(qpattern)
+        
+        # 4. Find which stored file it is closest to
+        idx, overlap = find_closest_match(retrieved)
+        
         if idx >= 0:
             match = entries[idx]
-            last_result = {
+            last_match = {
                 'name': match['name'],
                 'type': match['type'],
                 'overlap': f"{overlap * 100:.1f}%",
-                'original_b64': match['original_b64'],
+                'original_b64': match['original_b64']
             }
-            flash(f"Match: {match['name']}  ({overlap*100:.1f}% overlap)", 'ok')
+            flash(f"Found match: {match['name']} ({overlap*100:.1f}% overlap)")
         else:
-            last_result = None
-            flash("No match found.", 'err')
-
+            last_match = None
+            flash("No match found.")
+            
     except Exception as e:
-        flash(f"Retrieval error: {e}", 'err')
-        last_result = None
-
-    return redirect(url_for('index'))
+        flash(f"Error during retrieval: {e}")
+        last_match = None
+        
+    return redirect('/')
 
 
 @app.route('/download_retrieved')
 def download_retrieved():
-    if not last_result:
-        flash("No result to download.", 'err')
-        return redirect(url_for('index'))
-    data = base64.b64decode(last_result['original_b64'])
+    global last_match
+    if not last_match:
+        flash("No result to download.")
+        return redirect('/')
+        
+    data = base64.b64decode(last_match['original_b64'])
     return send_file(
         io.BytesIO(data),
         as_attachment=True,
-        download_name='retrieved_' + last_result['name']
+        download_name='retrieved_' + last_match['name']
     )
-
-
-# ═══════════════════════════════════════════════════════════════
-#  MAIN
-# ═══════════════════════════════════════════════════════════════
-
-if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5000)
