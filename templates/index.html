@@ -37,11 +37,45 @@
         }
         .result-box p { margin: 4px 0; }
         a { color: blue; }
+        
+        /* New styles for the instructions box */
+        .info-box {
+            background: #f4f4f4;
+            padding: 15px;
+            border: 1px solid #ddd;
+            margin-bottom: 20px;
+        }
+        .info-box h2 {
+            margin-top: 0;
+            margin-bottom: 5px;
+        }
+        .info-box ol {
+            margin-left: 20px;
+            margin-top: 5px;
+        }
+        .info-box li {
+            margin-bottom: 8px;
+        }
     </style>
 </head>
 <body>
 
 <h1>File Recovery System</h1>
+
+<!-- Instructions Box -->
+<div class="info-box">
+    <h2>What does this do?</h2>
+    <p>This tool uses a Hopfield Network to "memorize" your files. If a file gets damaged or corrupted later, you can upload the damaged version, and the network will try to find and return the original, undamaged file.</p>
+    
+    <h2>How to use it:</h2>
+    <ol>
+        <li><strong>Store Files:</strong> Upload the good, undamaged files you want to memorize and click "Store".</li>
+        <li><strong>Download Memory File:</strong> Click "Download Memory File" and save the <code>hopfield_memory.json</code> file to your computer.<br>
+        <em style="color:red;">Important:</em> The free server deletes your stored files after 15 minutes of inactivity. You MUST download the memory file to keep your data!</li>
+        <li><strong>Retrieve Later:</strong> When you have a damaged file, come back to this page. Upload your saved <code>hopfield_memory.json</code> file and the damaged file, then click "Retrieve".</li>
+        <li><strong>Download Result:</strong> If a match is found, click "Download Retrieved File" to get the original file back.</li>
+    </ol>
+</div>
 
 <!-- Flash messages -->
 {% with messages = get_flashed_messages() %}
