@@ -1,111 +1,114 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Hopfield Memory</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>File Recovery System</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: monospace;
+            max-width: 700px;
+            margin: 20px auto;
+            padding: 0 20px;
+            line-height: 1.6;
+        }
+        h1 { font-size: 1.4em; font-weight: normal; margin-bottom: 16px; }
+        h2 { font-size: 1.1em; font-weight: bold; margin: 20px 0 8px; }
+        form { margin: 8px 0; }
+        label { display: inline; }
+        input[type="file"] { margin: 4px 0; }
+        input[type="number"] { width: 60px; padding: 2px 4px; font-family: monospace; }
+        button {
+            padding: 6px 14px;
+            margin: 4px 2px;
+            font-family: monospace;
+            cursor: pointer;
+        }
+        hr { margin: 30px 0; border: none; border-top: 1px solid #ccc; }
+        .ok { color: green; }
+        .err { color: red; }
+        .flash-msg { margin: 3px 0; font-size: 0.9em; }
+        .file-entry { padding: 2px 0; font-size: 0.9em; color: green; }
+        .result-box {
+            margin-top: 12px;
+            padding: 12px;
+            border: 1px solid #ccc;
+        }
+        .result-box p { margin: 4px 0; }
+        a { color: blue; }
+    </style>
 </head>
+<body>
 
-<body style="font-family: Arial; margin:20px;">
+<h1>File Recovery System</h1>
 
-<h1>Hopfield Media Retrieval System</h1>
-
-{% with messages = get_flashed_messages(with_categories=true) %}
+<!-- Flash messages -->
+{% with messages = get_flashed_messages() %}
 {% if messages %}
-    {% for category, message in messages %}
-        <p>{{ message }}</p>
-    {% endfor %}
+{% for message in messages %}
+<p class="flash-msg ok">{{ message }}</p>
+{% endfor %}
 {% endif %}
 {% endwith %}
 
-<hr>
-
+<!-- ═══════════════ CONFIG ═══════════════ -->
 <h2>Pattern Size</h2>
-
 <form action="/config" method="post">
-    Side Length:
-    <input type="number" name="side"
-           value="{{ pattern_side }}"
-           min="8" max="256">
-
-    <button type="submit">Change</button>
+    <label>Side length:
+        <input type="number" name="side" value="{{ pattern_side }}" min="8" max="256">
+    </label>
+    <span style="color:#666; font-size:0.85em;">
+        (pattern = {{ pattern_side }}x{{ pattern_side }} = {{ pattern_side * pattern_side }})
+    </span>
+    <br>
+    <button type="submit">Set</button>
 </form>
-
-<p>
-Current Pattern Size:
-{{ pattern_side }} x {{ pattern_side }}
-</p>
-
-<p>Changing size will remove all stored files.</p>
+<p style="color:#666; font-size:0.85em;">Changing this clears the store.</p>
 
 <hr>
 
-<h2>Store Files</h2>
+<!-- ═══════════════ STORE ═══════════════ -->
+<h2>1. Store Files</h2>
 
 <form action="/store" method="post" enctype="multipart/form-data">
-    <input type="file" name="files" multiple>
-    <br><br>
-    <button type="submit">Store Files</button>
+    <input type="file" name="files" multiple><br>
+    <button type="submit">Store</button>
 </form>
-
-<br>
-
-<form action="/clear" method="post">
-    <button type="submit">Clear Memory</button>
+<form action="/clear" method="post" style="display:inline;">
+    <button type="submit">Clear All</button>
 </form>
 
 {% if entries %}
-
-<h3>Stored Files</h3>
-
-<ul>
+<p style="margin-top:10px;">{{ entries|length }} file(s) stored:</p>
 {% for e in entries %}
-    <li>{{ e.name }} ({{ e.type }})</li>
+<p class="file-entry">+ {{ e.name }} [{{ e.type }}]</p>
 {% endfor %}
-</ul>
-
-<a href="/download_memory">
-    Download Memory File
-</a>
-
+<br>
+<a href="/download_memory">Download Memory File (hopfield_memory.json)</a>
 {% endif %}
 
 <hr>
 
-<h2>Retrieve File</h2>
+<!-- ═══════════════ RETRIEVE ═══════════════ -->
+<h2>2. Retrieve File</h2>
 
 <form action="/retrieve" method="post" enctype="multipart/form-data">
-
-    <p>Select Memory JSON File:</p>
-    <input type="file" name="memory" accept=".json">
-
-    <br><br>
-
-    <p>Select Query/Damaged File:</p>
-    <input type="file" name="query">
-
-    <br><br>
-
+    <label>Upload memory file (.json):</label><br>
+    <input type="file" name="memory" accept=".json"><br><br>
+    <label>Upload damaged / query file:</label><br>
+    <input type="file" name="query"><br><br>
     <button type="submit">Retrieve</button>
-
 </form>
 
 {% if result %}
-
-<hr>
-
-<h2>Result</h2>
-
-<p><b>Matched File:</b> {{ result.name }}</p>
-
-<p><b>File Type:</b> {{ result.type }}</p>
-
-<p><b>Overlap Score:</b> {{ result.overlap }}</p>
-
-<br>
-
-<a href="/download_retrieved">
-    Download Retrieved File
-</a>
-
+<div class="result-box">
+    <p><strong>Matched file:</strong> {{ result.name }}</p>
+    <p><strong>Type:</strong> {{ result.type }}</p>
+    <p><strong>Overlap:</strong> {{ result.overlap }}</p>
+    <br>
+    <a href="/download_retrieved">Download Retrieved File</a>
+</div>
 {% endif %}
 
 </body>
