@@ -8,21 +8,16 @@ import numpy as np
 from PIL import Image
 from flask import Flask, render_template, request, send_file, redirect, url_for, flash
 
-# Try to import the extra libraries. If they are not there, we just skip those file types.
+# Try to import the extra libraries
 try:
     import fitz # for pdf
 except:
     fitz = None
 
 try:
-    import cv2 # for video
+    import h5py # for hdf5
 except:
-    cv2 = None
-
-try:
-    import librosa # for audio
-except:
-    librosa = None
+    h5py = None
 
 
 # ------------------------------------------------------------------
@@ -30,24 +25,18 @@ except:
 # ------------------------------------------------------------------
 app = Flask(__name__)
 app.secret_key = 'supersecretkey'
-# Max upload size 50MB
 app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024
 
 
 # ------------------------------------------------------------------
-# GLOBAL VARIABLES (where we store everything in memory)
+# GLOBAL VARIABLES
 # ------------------------------------------------------------------
 PATTERN_SIDE = 64
 PATTERN_SIZE = 64 * 64 # 4096
 BETA = 8.0
 
-# This list will hold the actual patterns (lists of 1 and -1)
 my_stored_patterns = []
-
-# This list will hold the file info and the original file data so we can download it later
 my_stored_files = []
-
-# To hold the last result so the user can download it
 last_match = None
 
 
@@ -62,13 +51,11 @@ def downsample_list(arr, target_size):
     
     new_arr = []
     for i in range(target_size):
-        # find where we are in the old array
         pos = (i / (target_size - 1)) * (len(arr) - 1)
         low_idx = int(pos)
         high_idx = min(low_idx + 1, len(arr) - 1)
         fraction = pos - low_idx
         
-        # blend between the two nearest points
         val = arr[low_idx] * (1 - fraction) + arr[high_idx] * fraction
         new_arr.append(val)
         
@@ -79,19 +66,16 @@ def make_binary(arr):
     """Turn an array of numbers into an array of only 1 and -1."""
     arr = np.array(arr, dtype=float)
     
-    # 1. normalize to 0 to 1
     mn = arr.min()
     mx = arr.max()
     if mx - mn < 0.00001:
-        return [1] * len(arr) # everything is the same
+        return [1] * len(arr)
     
     norm_arr = (arr - mn) / (mx - mn)
     
-    # 2. find the middle (median)
     sorted_arr = sorted(norm_arr)
     middle = sorted_arr[len(sorted_arr) // 2]
     
-    # 3. if above middle, 1. if below middle, -1.
     result = []
     for val in norm_arr:
         if val >= middle:
@@ -108,10 +92,14 @@ def get_file_type(filename):
     
     if ext in ['png', 'jpg', 'jpeg', 'bmp', 'gif', 'webp']:
         return 'image'
-    elif ext in ['wav', 'mp3', 'ogg', 'flac', 'aac', 'm4a']:
-        return 'audio'
-    elif ext in ['mp4', 'avi', 'mov', 'mkv', 'webm']:
-        return 'video'
+    elif ext in ['py']:
+        return 'python'
+    elif ext in ['ipynb']:
+        return 'notebook'
+    elif ext in ['hdf5', 'h5']:
+        return 'hdf5'
+    elif ext in ['pkl']:
+        return 'pickle'
     elif ext in ['pdf']:
         return 'pdf'
     else:
@@ -119,59 +107,14 @@ def get_file_type(filename):
 
 
 # ------------------------------------------------------------------
-# ENCODERS (turn files into lists of 1 and -1)
+# ENCODERS
 # ------------------------------------------------------------------
 
 def encode_image(file_bytes, side):
-    img = Image.open(io.BytesIO(file_bytes)).convert('L') # L means grayscale
+    img = Image.open(io.BytesIO(file_bytes)).convert('L')
     img = img.resize((side, side))
-    pixels = list(img.getdata()) # get pixel values as a list
+    pixels = list(img.getdata())
     return make_binary(pixels)
-
-
-def encode_audio(file_bytes, side):
-    if librosa is None:
-        raise Exception("Audio library not installed on server.")
-    
-    # librosa needs a file path, so we write to a temp file
-    tmp = tempfile.NamedTemporaryFile(delete=False)
-    tmp.write(file_bytes)
-    tmp.close()
-    
-    try:
-        y, sr = librosa.load(tmp.name, sr=22050, duration=10.0)
-        data = downsample_list(list(y), side * side)
-        return make_binary(data)
-    finally:
-        os.unlink(tmp.name) # delete temp file
-
-
-def encode_video(file_bytes, side):
-    if cv2 is None:
-        raise Exception("Video library not installed on server.")
-        
-    tmp = tempfile.NamedTemporaryFile(suffix='.mp4', delete=False)
-    tmp.write(file_bytes)
-    tmp.close()
-    
-    try:
-        cap = cv2.VideoCapture(tmp.name)
-        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-        
-        # jump to the middle of the video
-        cap.set(cv2.CAP_PROP_POS_FRAMES, total_frames // 2)
-        ret, frame = cap.read()
-        cap.release()
-        
-        if not ret:
-            raise Exception("Could not read video frame")
-            
-        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        gray = cv2.resize(gray, (side, side))
-        pixels = list(gray.flatten())
-        return make_binary(pixels)
-    finally:
-        os.unlink(tmp.name)
 
 
 def encode_pdf(file_bytes, side):
@@ -189,16 +132,82 @@ def encode_pdf(file_bytes, side):
     return make_binary(pixels)
 
 
+def encode_python(file_bytes, side):
+    """Read the python file bytes and convert directly to numbers."""
+    # list(file_bytes) gives us numbers from 0 to 255
+    arr = list(file_bytes)
+    if not arr:
+        raise Exception("Python file is empty.")
+    data = downsample_list(arr, side * side)
+    return make_binary(data)
+
+
+def encode_notebook(file_bytes, side):
+    """Read the ipynb file bytes and convert directly to numbers."""
+    arr = list(file_bytes)
+    if not arr:
+        raise Exception("Notebook file is empty.")
+    data = downsample_list(arr, side * side)
+    return make_binary(data)
+
+
+def encode_pickle(file_bytes, side):
+    """Read the pkl file bytes and convert directly to numbers."""
+    # We don't unpickle it (which can be unsafe), we just read the raw bytes
+    arr = list(file_bytes)
+    if not arr:
+        raise Exception("Pickle file is empty.")
+    data = downsample_list(arr, side * side)
+    return make_binary(data)
+
+
+def encode_hdf5(file_bytes, side):
+    """Open the HDF5 file, pull out all numbers from all datasets, and flatten them."""
+    if h5py is None:
+        raise Exception("HDF5 library not installed on server.")
+        
+    # h5py needs a real file on disk to read
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix='.h5')
+    tmp.write(file_bytes)
+    tmp.close()
+    
+    try:
+        numbers = []
+        
+        # This function visits every item in the HDF5 file
+        def grab_numbers(name, obj):
+            if isinstance(obj, h5py.Dataset):
+                # Check if it's a number type (not a string)
+                if np.issubdtype(obj.dtype, np.number):
+                    data = obj[()].flatten() # get the data and make it 1D
+                    numbers.extend(data)
+                    
+        with h5py.File(tmp.name, 'r') as f:
+            f.visititems(grab_numbers)
+            
+        if not numbers:
+            raise Exception("No numeric data found inside the HDF5 file.")
+            
+        data = downsample_list(numbers, side * side)
+        return make_binary(data)
+    finally:
+        os.unlink(tmp.name) # delete temp file
+
+
 def encode_file(filename, file_bytes, side):
     """Figure out what kind of file it is and encode it."""
     ftype = get_file_type(filename)
     
     if ftype == 'image':
         return encode_image(file_bytes, side), ftype
-    elif ftype == 'audio':
-        return encode_audio(file_bytes, side), ftype
-    elif ftype == 'video':
-        return encode_video(file_bytes, side), ftype
+    elif ftype == 'python':
+        return encode_python(file_bytes, side), ftype
+    elif ftype == 'notebook':
+        return encode_notebook(file_bytes, side), ftype
+    elif ftype == 'hdf5':
+        return encode_hdf5(file_bytes, side), ftype
+    elif ftype == 'pickle':
+        return encode_pickle(file_bytes, side), ftype
     elif ftype == 'pdf':
         return encode_pdf(file_bytes, side), ftype
     else:
@@ -206,15 +215,10 @@ def encode_file(filename, file_bytes, side):
 
 
 # ------------------------------------------------------------------
-# HOPFIELD NETWORK LOGIC (Written simply with loops)
+# HOPFIELD NETWORK LOGIC
 # ------------------------------------------------------------------
 
 def hopfield_retrieve(query_pattern):
-    """
-    This does the Modern Hopfield retrieval using basic loops.
-    It looks at all stored patterns, compares them to the query,
-    and tries to converge on the closest match.
-    """
     global my_stored_patterns, BETA, PATTERN_SIZE
     
     K = len(my_stored_patterns)
@@ -222,13 +226,11 @@ def hopfield_retrieve(query_pattern):
         return query_pattern
         
     N = PATTERN_SIZE
-    state = list(query_pattern) # make a copy
+    state = list(query_pattern)
     
-    # Iterate up to 300 times
     for step in range(300):
         changed = False
         
-        # 1. Calculate similarities (softmax attention)
         similarities = [0.0] * K
         for mu in range(K):
             dot_product = 0
@@ -236,7 +238,6 @@ def hopfield_retrieve(query_pattern):
                 dot_product += my_stored_patterns[mu][i] * state[i]
             similarities[mu] = BETA * dot_product / N
             
-        # Stable softmax (subtract max so math.exp doesn't crash)
         max_sim = max(similarities)
         weights = [0.0] * K
         sum_weights = 0.0
@@ -247,7 +248,6 @@ def hopfield_retrieve(query_pattern):
         for mu in range(K):
             weights[mu] = weights[mu] / sum_weights
             
-        # 2. Update the state based on weights
         for i in range(N):
             h = 0.0
             for mu in range(K):
@@ -262,7 +262,6 @@ def hopfield_retrieve(query_pattern):
                 changed = True
                 state[i] = new_val
                 
-        # If nothing changed, we found a stable memory!
         if not changed:
             break
             
@@ -270,7 +269,6 @@ def hopfield_retrieve(query_pattern):
 
 
 def find_closest_match(retrieved_pattern):
-    """Compare the retrieved pattern to all stored patterns to find the best overlap."""
     global my_stored_patterns, my_stored_files, PATTERN_SIZE
     
     best_index = -1
@@ -317,7 +315,6 @@ def set_config():
     PATTERN_SIDE = side
     PATTERN_SIZE = side * side
     
-    # Reset everything because size changed
     my_stored_patterns = []
     my_stored_files = []
     flash(f"Pattern size set to {PATTERN_SIDE}x{PATTERN_SIDE} = {PATTERN_SIZE}. Store cleared.")
@@ -340,10 +337,8 @@ def store_files():
             data = f.read()
             pattern, ftype = encode_file(f.filename, data, PATTERN_SIDE)
             
-            # Save the pattern
             my_stored_patterns.append(pattern)
             
-            # Save the original file so we can return it later
             b64_data = base64.b64encode(data).decode()
             my_stored_files.append({
                 'name': f.filename,
@@ -376,7 +371,6 @@ def download_memory():
         flash("Nothing to download.")
         return redirect('/')
         
-    # Build a big dictionary to save as JSON
     payload = {
         'pattern_size': PATTERN_SIZE,
         'pattern_side': PATTERN_SIDE,
@@ -416,7 +410,6 @@ def retrieve_file():
         return redirect('/')
         
     try:
-        # 1. Load memory
         mem = json.loads(mem_file.read())
         entries = mem['entries']
         if not entries:
@@ -427,17 +420,13 @@ def retrieve_file():
         side = mem.get('pattern_side', int(math.sqrt(N)))
         beta = mem.get('beta', BETA)
         
-        # Put patterns back into global list temporarily
         my_stored_patterns = [e['pattern'] for e in entries]
         
-        # 2. Encode the damaged query file
         qdata = qry_file.read()
         qpattern, _ = encode_file(qry_file.filename, qdata, side)
         
-        # 3. Run Hopfield retrieval
         retrieved = hopfield_retrieve(qpattern)
         
-        # 4. Find which stored file it is closest to
         idx, overlap = find_closest_match(retrieved)
         
         if idx >= 0:
