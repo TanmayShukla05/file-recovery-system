@@ -8,12 +8,12 @@
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
             font-family: monospace;
-            max-width: 700px;
+            max-width: 1050px; /* Increased width to fit two columns */
             margin: 20px auto;
             padding: 0 20px;
             line-height: 1.6;
         }
-        h1 { font-size: 1.4em; font-weight: normal; margin-bottom: 16px; }
+        h1 { font-size: 1.4em; font-weight: normal; margin-bottom: 20px; text-align: center; }
         h2 { font-size: 1.1em; font-weight: bold; margin: 20px 0 8px; }
         form { margin: 8px 0; }
         label { display: inline; }
@@ -38,23 +38,52 @@
         .result-box p { margin: 4px 0; }
         a { color: blue; }
         
-        /* New styles for the instructions box */
+        /* Layout for side-by-side */
+        .container {
+            display: flex;
+            gap: 40px;
+            align-items: flex-start;
+        }
+        
+        .left-col {
+            flex: 0 0 42%; /* Takes up 42% of the width */
+        }
+        
+        .right-col {
+            flex: 1; /* Takes up the remaining space */
+        }
+
+        /* Styles for the instructions box */
         .info-box {
             background: #f4f4f4;
             padding: 15px;
             border: 1px solid #ddd;
-            margin-bottom: 20px;
+            position: sticky; /* Makes instructions stay visible when scrolling right side */
+            top: 20px;
         }
         .info-box h2 {
             margin-top: 0;
             margin-bottom: 5px;
         }
-        .info-box ol {
+        .info-box ol, .info-box ul {
             margin-left: 20px;
             margin-top: 5px;
         }
         .info-box li {
             margin-bottom: 8px;
+        }
+
+        /* Stack columns on small screens (mobile) */
+        @media (max-width: 768px) {
+            .container {
+                flex-direction: column;
+            }
+            .left-col {
+                flex: 1 1 100%;
+            }
+            .info-box {
+                position: static; /* Disable sticky on mobile */
+            }
         }
     </style>
 </head>
@@ -62,100 +91,109 @@
 
 <h1>File Recovery System</h1>
 
-<!-- Instructions Box -->
-<div class="info-box">
-    <h2>What does this do?</h2>
-    <p>This tool uses a Hopfield Network to memorize the files you upload. Later, if a file is accidentally edited, partially corrupted, overwritten, or otherwise altered, you can upload that modified version and the network will try to recognize it and recover the closest matching original file from its memory.</p>
+<div class="container">
+    <!-- LEFT COLUMN: Instructions -->
+    <div class="left-col">
+        <div class="info-box">
+            <h2>What does this do?</h2>
+            <p>This tool uses a Hopfield Network to memorize the files you upload. Later, if a file is accidentally edited, partially corrupted, overwritten, or otherwise altered, you can upload that modified version and the network will try to recognize it and recover the closest matching original file from its memory.</p>
 
-    <h2>How to use it:</h2>
-    <ol>
-        <li><strong>Store Files:</strong> Upload the original files you want the network to memorize and click "Store".</li>
+            <h2>How to use it:</h2>
+            <ol>
+                <li><strong>Store Files:</strong> Upload the original files you want the network to memorize and click "Store".</li>
 
-        <li><strong>Download Memory File:</strong> Click "Download Memory File" and save the <code>hopfield_memory.json</code> file to your computer.<br>
-        <em style="color:red;">Important:</em> The server only keeps data temporarily and may delete stored files after inactivity. Downloading the memory file ensures you can use the tool later.</li>
+                <li><strong>Download Memory File:</strong> Click "Download Memory File" and save the <code>hopfield_memory.json</code> file to your computer.<br>
+                <em style="color:red;">Important:</em> The server only keeps data temporarily and may delete stored files after inactivity. Downloading the memory file ensures you can use the tool later.</li>
 
-        <li><strong>Retrieve Later:</strong> If a file becomes corrupted, accidentally modified, partially lost, or otherwise differs from the original, return to this page. Upload both your saved <code>hopfield_memory.json</code> file and the altered file, then click "Retrieve".</li>
+                <li><strong>Retrieve Later:</strong> If a file becomes corrupted, accidentally modified, partially lost, or otherwise differs from the original, return to this page. Upload both your saved <code>hopfield_memory.json</code> file and the altered file, then click "Retrieve".</li>
 
-        <li><strong>Download Result:</strong> If the network finds a match, you can download the recovered version of the original file.</li>
-    </ol>
+                <li><strong>Download Result:</strong> If the network finds a match, you can download the recovered version of the original file.</li>
+            </ol>
 
-    <h2>Supported File Types</h2>
-    <ul>
-        <li><strong>Images:</strong> PNG, JPG, JPEG, BMP, GIF, WEBP</li>
-        <li><strong>Python Code:</strong> PY</li>
-        <li><strong>Jupyter Notebooks:</strong> IPYNB</li>
-        <li><strong>Data Files:</strong> HDF5, H5, PKL</li>
-        <li><strong>Documents:</strong> PDF</li>
-    </ul>
+            <h2>Supported File Types</h2>
+            <ul>
+                <li><strong>Images:</strong> PNG, JPG, JPEG, BMP, GIF, WEBP</li>
+                <li><strong>Python Code:</strong> PY</li>
+                <li><strong>Jupyter Notebooks:</strong> IPYNB</li>
+                <li><strong>Data Files:</strong> HDF5, H5, PKL</li>
+                <li><strong>Documents:</strong> PDF</li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- RIGHT COLUMN: Functions -->
+    <div class="right-col">
+        
+        <!-- Flash messages -->
+        {% with messages = get_flashed_messages() %}
+        {% if messages %}
+        {% for message in messages %}
+        <p class="flash-msg ok">{{ message }}</p>
+        {% endfor %}
+        {% endif %}
+        {% endwith %}
+
+        <!-- ═══════════════ CONFIG ═══════════════ -->
+        <h2>Pattern Size</h2>
+        <form action="/config" method="post">
+            <label>Side length:
+                <input type="number" name="side" value="{{ pattern_side }}" min="8" max="256">
+            </label>
+            <span style="color:#666; font-size:0.85em;">
+                (pattern = {{ pattern_side }}x{{ pattern_side }} = {{ pattern_side * pattern_side }})
+            </span>
+            <br>
+            <button type="submit">Set</button>
+        </form>
+        <p style="color:#666; font-size:0.85em;">Changing this clears the store.</p>
+
+        <hr>
+
+        <!-- ═══════════════ STORE ═══════════════ -->
+        <h2>1. Store Files</h2>
+
+        <form action="/store" method="post" enctype="multipart/form-data">
+            <input type="file" name="files" multiple><br>
+            <button type="submit">Store</button>
+        </form>
+        <form action="/clear" method="post" style="display:inline;">
+            <button type="submit">Clear All</button>
+        </form>
+
+        {% if entries %}
+        <p style="margin-top:10px;">{{ entries|length }} file(s) stored:</p>
+        {% for e in entries %}
+        <p class="file-entry">+ {{ e.name }} [{{ e.type }}]</p>
+        {% endfor %}
+        <br>
+        <a href="/download_memory">Download Memory File (hopfield_memory.json)</a>
+        {% endif %}
+
+        <hr>
+
+        <!-- ═══════════════ RETRIEVE ═══════════════ -->
+        <h2>2. Retrieve File</h2>
+
+        <form action="/retrieve" method="post" enctype="multipart/form-data">
+            <label>Upload memory file (.json):</label><br>
+            <input type="file" name="memory" accept=".json"><br><br>
+            <label>Upload damaged / query file:</label><br>
+            <input type="file" name="query"><br><br>
+            <button type="submit">Retrieve</button>
+        </form>
+
+        {% if result %}
+        <div class="result-box">
+            <p><strong>Matched file:</strong> {{ result.name }}</p>
+            <p><strong>Type:</strong> {{ result.type }}</p>
+            <p><strong>Overlap:</strong> {{ result.overlap }}</p>
+            <br>
+            <a href="/download_retrieved">Download Retrieved File</a>
+        </div>
+        {% endif %}
+
+    </div>
 </div>
-
-<!-- Flash messages -->
-{% with messages = get_flashed_messages() %}
-{% if messages %}
-{% for message in messages %}
-<p class="flash-msg ok">{{ message }}</p>
-{% endfor %}
-{% endif %}
-{% endwith %}
-
-<!-- ═══════════════ CONFIG ═══════════════ -->
-<h2>Pattern Size</h2>
-<form action="/config" method="post">
-    <label>Side length:
-        <input type="number" name="side" value="{{ pattern_side }}" min="8" max="256">
-    </label>
-    <span style="color:#666; font-size:0.85em;">
-        (pattern = {{ pattern_side }}x{{ pattern_side }} = {{ pattern_side * pattern_side }})
-    </span>
-    <br>
-    <button type="submit">Set</button>
-</form>
-<p style="color:#666; font-size:0.85em;">Changing this clears the store.</p>
-
-<hr>
-
-<!-- ═══════════════ STORE ═══════════════ -->
-<h2>1. Store Files</h2>
-
-<form action="/store" method="post" enctype="multipart/form-data">
-    <input type="file" name="files" multiple><br>
-    <button type="submit">Store</button>
-</form>
-<form action="/clear" method="post" style="display:inline;">
-    <button type="submit">Clear All</button>
-</form>
-
-{% if entries %}
-<p style="margin-top:10px;">{{ entries|length }} file(s) stored:</p>
-{% for e in entries %}
-<p class="file-entry">+ {{ e.name }} [{{ e.type }}]</p>
-{% endfor %}
-<br>
-<a href="/download_memory">Download Memory File (hopfield_memory.json)</a>
-{% endif %}
-
-<hr>
-
-<!-- ═══════════════ RETRIEVE ═══════════════ -->
-<h2>2. Retrieve File</h2>
-
-<form action="/retrieve" method="post" enctype="multipart/form-data">
-    <label>Upload memory file (.json):</label><br>
-    <input type="file" name="memory" accept=".json"><br><br>
-    <label>Upload damaged / query file:</label><br>
-    <input type="file" name="query"><br><br>
-    <button type="submit">Retrieve</button>
-</form>
-
-{% if result %}
-<div class="result-box">
-    <p><strong>Matched file:</strong> {{ result.name }}</p>
-    <p><strong>Type:</strong> {{ result.type }}</p>
-    <p><strong>Overlap:</strong> {{ result.overlap }}</p>
-    <br>
-    <a href="/download_retrieved">Download Retrieved File</a>
-</div>
-{% endif %}
 
 </body>
 </html>
