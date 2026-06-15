@@ -1,50 +1,24 @@
-# Hopfield File Recovery System
+# File Recovery System
 
-This is a small project made using Flask and Hopfield Networks.
+Website: https://file-recovery-system.onrender.com/
 
-Website:
+This is a project that uses a Hopfield network to store files and get them back if they get damaged.
 
-https://file-recovery-system.onrender.com/
+## How to use
 
-The website can store files in a Hopfield Network and later retrieve the original file from a damaged or noisy version.
+1. Set the pattern size (default is 64x64).
+2. Upload some files (images, audio, video, pdf) and click Store.
+3. Click "Download Memory File" to save a file with all the patterns.
+4. Later, upload that memory file and a damaged version of one of the files.
+5. Click Retrieve and it will find the closest match. You can download the original file back.
 
-## Supported Files
+## Supported file types
 
-* Images
-* Audio files
-* Videos
-* PDF files
+- Images: png, jpg, jpeg, bmp, gif, webp
+- Audio: wav, mp3, ogg, flac, aac, m4a
+- Video: mp4, avi, mov, mkv, webm
+- PDF: pdf
 
-## How to Use
+## How it works
 
-### Store Files
-
-1. Open the website.
-2. Choose the pattern size.
-3. Upload one or more files.
-4. Click **Store**.
-5. Download the memory file.
-
-### Retrieve Files
-
-1. Upload the memory file.
-2. Upload a damaged version of one of the stored files.
-3. Click **Retrieve**.
-4. Download the recovered file.
-
-## Libraries Used
-
-* Flask
-* NumPy
-* Pillow
-* OpenCV
-* Librosa
-* PyMuPDF
-
-## About the Project
-
-The project uses a Modern Hopfield Network to store binary patterns generated from files. During retrieval, the uploaded query file is converted into a pattern and matched with the stored memories. The closest stored memory is then returned to the user.
-
-## Try it Here
-
-https://file-recovery-system.onrender.com/
+It turns files into simple lists of 1s and -1s. It stores these lists in a Modern Hopfield Network. When you upload a damaged file, it also turns that into 1s and -1s. The network updates the damaged list until it settles on the closest stored memory. Then it gives you the original file back.
