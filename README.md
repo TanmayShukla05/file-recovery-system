@@ -1,56 +1,67 @@
-# Hopfield Media Retrieval
+# Hopfield File Recovery System
 
-Store images, audio, video, and PDFs as binary patterns in a
-Modern Hopfield Network. Then upload a damaged/noisy version
-and retrieve the original file back.
+This is a simple project made using Flask and Hopfield Networks.
 
-All logic is Python (Flask). The webpage has **zero JavaScript**.
+Website Link:
 
-## Run locally
+https://file-recovery-system.onrender.com/
+
+The project can store different types of files as patterns in a Hopfield Network and later try to recover the original file from a damaged version.
+
+## Files Supported
+
+* Images
+* Audio files
+* Videos
+* PDF files
+
+## How to Use
+
+### Storing Files
+
+1. Open the website.
+2. Choose the pattern size.
+3. Upload one or more files.
+4. Click **Store**.
+5. Download the generated memory file.
+
+### Retrieving Files
+
+1. Upload the memory file.
+2. Upload a damaged/noisy version of a stored file.
+3. Click **Retrieve**.
+4. Download the recovered file.
+
+## Running Locally
+
+Install the required packages:
 
 ```bash
 pip install -r requirements.txt
+```
+
+Run the Flask app:
+
+```bash
 python app.py
 ```
 
-Open http://localhost:5000
+Then open:
 
-## Deploy on Render (free)
+```text
+http://localhost:5000
+```
 
-1. Push this repo to GitHub.
-2. Go to [render.com](https://render.com) and sign up with GitHub.
-3. Click **New → Web Service**.
-4. Connect your GitHub repo.
-5. Settings:
-   - **Build Command:** `pip install -r requirements.txt`
-   - **Start Command:** `gunicorn app:app`
-   - **Plan:** Free
-6. Click **Deploy**. Your site is live at the URL Render gives you.
+## Idea Behind the Project
 
-## How to use
+The project uses a Modern Hopfield Network to store patterns generated from files. When a damaged file is uploaded, the network finds the closest stored pattern and returns the corresponding original file.
 
-### Store
-1. Set the pattern side length (default 64 → 4096).
-2. Select files (image, audio, video, PDF).
-3. Click **Store**.
-4. Click **Download Memory File** to save `hopfield_memory.json`.
+## Made Using
 
-### Retrieve
-1. Upload the **memory file** (.json).
-2. Upload a **damaged or noisy version** of a stored file.
-3. Click **Retrieve**.
-4. Click **Download Retrieved File** to get the original back.
-
-## Supported file types
-
-| Type  | Extensions                     | How it's encoded                  |
-|-------|--------------------------------|-----------------------------------|
-| Image | png, jpg, jpeg, bmp, gif, webp | Grayscale → resize → binarize     |
-| Audio | wav, mp3, ogg, flac, aac, m4a  | Waveform → downsample → binarize  |
-| Video | mp4, avi, mov, mkv, webm       | Middle frame → resize → binarize  |
-| PDF   | pdf                            | Render page 1 → resize → binarize |
-
-## Network
-
-Modern Hopfield (Dense Associative Memory). Capacity far exceeds
-the classical 0.138·N limit. Retrieval uses softmax attention.
+* Python
+* Flask
+* NumPy
+* OpenCV
+* Pillow
+* PyMuPDF
+* Librosa
