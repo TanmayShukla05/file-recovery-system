@@ -7,7 +7,7 @@ This is a project that uses a Hopfield network to store files and get them back 
 ## How to use
 
 1. Set the pattern size (default is 64x64).
-2. Upload some files (images, audio, video, pdf) and click Store.
+2. Upload some files and click Store.
 3. Click "Download Memory File" to save a file with all the patterns.
 4. Later, upload that memory file and a damaged version of one of the files.
 5. Click Retrieve and it will find the closest match. You can download the original file back.
@@ -15,10 +15,11 @@ This is a project that uses a Hopfield network to store files and get them back 
 ## Supported file types
 
 - Images: png, jpg, jpeg, bmp, gif, webp
-- Audio: wav, mp3, ogg, flac, aac, m4a
-- Video: mp4, avi, mov, mkv, webm
-- PDF: pdf
+- Python code: py
+- Jupyter Notebooks: ipynb
+- Data files: hdf5, h5, pkl
+- Documents: pdf
 
 ## How it works
 
-It turns files into simple lists of 1s and -1s. It stores these lists in a Modern Hopfield Network. When you upload a damaged file, it also turns that into 1s and -1s. The network updates the damaged list until it settles on the closest stored memory. Then it gives you the original file back.
+It turns files into simple lists of 1s and -1s. For code and pickle files, it reads the raw bytes. For HDF5 files, it pulls out the numbers stored inside. It stores these lists in a Modern Hopfield Network. When you upload a damaged file, the network tries to fix the pattern and finds the closest match. Then it gives you the original file back.
