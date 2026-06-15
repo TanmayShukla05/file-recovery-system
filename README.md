@@ -2,7 +2,7 @@
 
 Website: https://file-recovery-system.onrender.com/
 
-This is a project that uses a Hopfield network to store files and get them back if they get damaged.
+This is a project that uses a Hopfield network to store files and get them back if they get damaged or edited.
 
 ## How to use
 
