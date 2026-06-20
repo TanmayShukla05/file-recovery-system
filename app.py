@@ -132,31 +132,17 @@ def encode_pdf(file_bytes, side):
     return make_binary(pixels)
 
 
-def encode_python(file_bytes, side):
-    """Read the python file bytes and convert directly to numbers."""
-    # list(file_bytes) gives us numbers from 0 to 255
+def encode_raw_bytes(file_bytes, side):
+    """Read raw file bytes and convert directly to numbers.
+
+    Used for python (.py), notebook (.ipynb), and pickle (.pkl) files —
+    they all just get treated as a plain byte stream. For pickle files,
+    we deliberately don't unpickle (which can be unsafe), we just read
+    the raw bytes like any other file.
+    """
     arr = list(file_bytes)
     if not arr:
-        raise Exception("Python file is empty.")
-    data = downsample_list(arr, side * side)
-    return make_binary(data)
-
-
-def encode_notebook(file_bytes, side):
-    """Read the ipynb file bytes and convert directly to numbers."""
-    arr = list(file_bytes)
-    if not arr:
-        raise Exception("Notebook file is empty.")
-    data = downsample_list(arr, side * side)
-    return make_binary(data)
-
-
-def encode_pickle(file_bytes, side):
-    """Read the pkl file bytes and convert directly to numbers."""
-    # We don't unpickle it (which can be unsafe), we just read the raw bytes
-    arr = list(file_bytes)
-    if not arr:
-        raise Exception("Pickle file is empty.")
+        raise Exception("File is empty.")
     data = downsample_list(arr, side * side)
     return make_binary(data)
 
@@ -200,14 +186,10 @@ def encode_file(filename, file_bytes, side):
     
     if ftype == 'image':
         return encode_image(file_bytes, side), ftype
-    elif ftype == 'python':
-        return encode_python(file_bytes, side), ftype
-    elif ftype == 'notebook':
-        return encode_notebook(file_bytes, side), ftype
+    elif ftype in ('python', 'notebook', 'pickle'):
+        return encode_raw_bytes(file_bytes, side), ftype
     elif ftype == 'hdf5':
         return encode_hdf5(file_bytes, side), ftype
-    elif ftype == 'pickle':
-        return encode_pickle(file_bytes, side), ftype
     elif ftype == 'pdf':
         return encode_pdf(file_bytes, side), ftype
     else:
@@ -462,3 +444,7 @@ def download_retrieved():
         as_attachment=True,
         download_name='retrieved_' + last_match['name']
     )
+
+
+if __name__ == '__main__':
+    app.run(debug=True)
