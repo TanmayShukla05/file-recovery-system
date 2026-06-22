@@ -29,14 +29,6 @@
         }
 
         form { margin: 8px 0; }
-        label { display: inline; }
-        input[type="file"] { margin: 4px 0; }
-
-        input[type="number"] {
-            width: 60px;
-            padding: 2px 4px;
-            font-family: monospace;
-        }
 
         button {
             padding: 6px 14px;
@@ -51,8 +43,8 @@
             border-top: 1px solid #ccc;
         }
 
-        .ok { color: green; }
-        .err { color: red; }
+        .ok  { color: green; }
+        .err { color: red;   }
 
         .flash-msg {
             margin: 3px 0;
@@ -80,13 +72,8 @@
             align-items: flex-start;
         }
 
-        .left-col {
-            flex: 0 0 42%;
-        }
-
-        .right-col {
-            flex: 1;
-        }
+        .left-col  { flex: 0 0 42%; }
+        .right-col { flex: 1; }
 
         .info-box {
             background: #f4f4f4;
@@ -96,20 +83,10 @@
             top: 20px;
         }
 
-        .info-box h2 {
-            margin-top: 0;
-            margin-bottom: 5px;
-        }
-
+        .info-box h2      { margin-top: 0; margin-bottom: 5px; }
         .info-box ol,
-        .info-box ul {
-            margin-left: 20px;
-            margin-top: 5px;
-        }
-
-        .info-box li {
-            margin-bottom: 8px;
-        }
+        .info-box ul      { margin-left: 20px; margin-top: 5px; }
+        .info-box li      { margin-bottom: 8px; }
 
         .stats-box {
             background: #fafafa;
@@ -118,27 +95,16 @@
             margin-top: 10px;
         }
 
-        .stats-box p {
-            margin: 4px 0;
-        }
+        .stats-box p { margin: 4px 0; }
 
-        .small-note {
-            color: #666;
-            font-size: 0.85em;
-        }
+        .small-note { color: #666; font-size: 0.85em; }
+
+        .result-set { margin-bottom: 18px; }
 
         @media (max-width: 768px) {
-            .container {
-                flex-direction: column;
-            }
-
-            .left-col {
-                flex: 1 1 100%;
-            }
-
-            .info-box {
-                position: static;
-            }
+            .container   { flex-direction: column; }
+            .left-col    { flex: 1 1 100%; }
+            .info-box    { position: static; }
         }
     </style>
 </head>
@@ -147,26 +113,41 @@
 <h1>File Recovery System</h1>
 
 <div class="container">
-    <!-- LEFT COLUMN: Instructions -->
+
+    <!-- ── LEFT: Instructions ── -->
     <div class="left-col">
         <div class="info-box">
             <h2>What does this do?</h2>
             <p>
-                This tool uses a Hopfield Network to memorize the files you upload. Later, if a file is accidentally edited,
-                partially corrupted, overwritten, or otherwise altered, you can upload that modified version and the network
-                will try to recognize it and recover the closest matching original file from its memory.
+                This tool uses a Hopfield Network to memorise the files you upload.
+                Later, if a file is accidentally edited, partially corrupted,
+                overwritten, or otherwise altered, you can upload that modified
+                version and the network will recognise it and recover the closest
+                matching original from its memory.
             </p>
 
             <h2>How to use it:</h2>
             <ol>
-                <li><strong>Store Files:</strong> Upload the original files you want the network to memorize and click "Store".</li>
-
-                <li><strong>Download Memory File:</strong> Click "Download Memory File" and save the <code>hopfield_memory.json</code> file to your computer.<br>
-                <em style="color:red;">Important:</em> The server only keeps data temporarily and may delete stored files after inactivity. Downloading the memory file ensures you can use the tool later.</li>
-
-                <li><strong>Retrieve Later:</strong> If a file becomes corrupted, accidentally modified, partially lost, or otherwise differs from the original, return to this page. Upload both your saved <code>hopfield_memory.json</code> file and the altered file, then click "Retrieve".</li>
-
-                <li><strong>Download Result:</strong> If the network finds a match, you can download the recovered version of the original file.</li>
+                <li>
+                    <strong>Store Files:</strong> Upload the original files and
+                    click "Store". The memory file
+                    (<code>hopfield_memory.npz</code>) will download automatically.
+                    Save it somewhere safe.
+                    <br>
+                    <em style="color:red;">Important:</em> The server only keeps
+                    data temporarily. The downloaded memory file is what lets you
+                    retrieve later.
+                </li>
+                <li>
+                    <strong>Retrieve Later:</strong> If a file becomes corrupted
+                    or altered, return here. Upload your saved
+                    <code>hopfield_memory.npz</code> and one or more damaged files,
+                    then click "Retrieve". You can query several files at once.
+                </li>
+                <li>
+                    <strong>Download Result:</strong> Each matched file gets its
+                    own download link.
+                </li>
             </ol>
 
             <h2>Supported File Types</h2>
@@ -177,114 +158,109 @@
                 <li><strong>Data Files:</strong> HDF5, H5, PKL</li>
                 <li><strong>Documents:</strong> PDF</li>
             </ul>
+
+            <h2>How the pattern size is chosen</h2>
+            <p>
+                The pattern size is set automatically so that the load factor
+                α = files / pattern_size stays ≤ {{ alpha_max }}.
+                This keeps the Hopfield Network in a reliable recall regime.
+                Uploading more files grows the pattern size automatically,
+                re-encoding everything at the new resolution.
+            </p>
         </div>
     </div>
 
-    <!-- RIGHT COLUMN: Functions -->
+    <!-- ── RIGHT: Controls ── -->
     <div class="right-col">
 
         <!-- Flash messages -->
         {% with messages = get_flashed_messages() %}
         {% if messages %}
-        {% for message in messages %}
-        <p class="flash-msg ok">{{ message }}</p>
-        {% endfor %}
+            {% for message in messages %}
+            <p class="flash-msg ok">{{ message }}</p>
+            {% endfor %}
         {% endif %}
         {% endwith %}
 
-        <!-- Pattern Size -->
-        <h2>Pattern Size</h2>
-        <form action="/config" method="post">
-            <label>Side length:
-                <input type="number" id="sideLengthInput" name="side" value="{{ pattern_side }}" min="8" max="256">
-            </label>
-            <span style="color:#666; font-size:0.85em;">
-                (pattern = <span id="patternSizeText">{{ pattern_side }}x{{ pattern_side }} = {{ pattern_side * pattern_side }}</span>)
-            </span>
-            <br>
-            <button type="submit">Set</button>
-        </form>
-        <p style="color:#666; font-size:0.85em;">Changing this clears the store.</p>
-
+        <!-- Live stats -->
         <div class="stats-box">
-            <p><strong>Files Stored:</strong> {{ entries|length }} / <span id="maxFiles">-</span> max</p>
+            <p><strong>Files Stored:</strong> {{ entries|length }}</p>
+            <p><strong>Current Pattern Size:</strong>
+                {{ current_side }}×{{ current_side }}
+                = {{ current_side * current_side }} bits/file
+            </p>
+            <p><strong>Load Factor (α):</strong>
+                {% if current_side * current_side > 0 %}
+                    {{ "%.3f"|format(entries|length / (current_side * current_side)) }}
+                    (max allowed: {{ alpha_max }})
+                {% else %}
+                    —
+                {% endif %}
+            </p>
+            <p><strong>Capacity at current size:</strong>
+                up to ~{{ capacity }} file(s) reliably
+            </p>
             <p class="small-note">
-                The max limit is the number of files the Hopfield Network can reliably remember without mixing them up. It scales with pattern size.
+                Pattern size grows automatically as you store more files.
             </p>
         </div>
 
         <hr>
 
-        <!-- Store Files -->
+        <!-- ── 1. Store ── -->
         <h2>1. Store Files</h2>
 
         <form action="/store" method="post" enctype="multipart/form-data">
             <input type="file" name="files" multiple><br>
-            <button type="submit">Store</button>
+            <button type="submit">Store  →  auto-download memory file</button>
         </form>
 
-        <form action="/clear" method="post" style="display:inline;">
+        <form action="/clear" method="post" style="display:inline; margin-top:6px;">
             <button type="submit">Clear All</button>
         </form>
 
         {% if entries %}
-        <p style="margin-top:10px;">{{ entries|length }} file(s) stored:</p>
+        <p style="margin-top:10px;">{{ entries|length }} file(s) in memory:</p>
         {% for e in entries %}
         <p class="file-entry">+ {{ e.name }} [{{ e.type }}]</p>
         {% endfor %}
         <br>
-        <a href="/download_memory">Download Memory File (hopfield_memory.json)</a>
+        <a href="/download_memory">Re-download Memory File (hopfield_memory.npz)</a>
         {% endif %}
 
         <hr>
 
-        <!-- Retrieve File -->
-        <h2>2. Retrieve File</h2>
+        <!-- ── 2. Retrieve ── -->
+        <h2>2. Retrieve File(s)</h2>
 
         <form action="/retrieve" method="post" enctype="multipart/form-data">
-            <label>Upload memory file (.json):</label><br>
-            <input type="file" name="memory" accept=".json"><br><br>
+            <label>Upload memory file (.npz):</label><br>
+            <input type="file" name="memory" accept=".npz"><br><br>
 
-            <label>Upload damaged / query file:</label><br>
-            <input type="file" name="query"><br><br>
+            <label>Upload damaged / query file(s) — select multiple if needed:</label><br>
+            <input type="file" name="query" multiple><br><br>
 
             <button type="submit">Retrieve</button>
         </form>
 
-        {% if result %}
-        <div class="result-box">
-            <p><strong>Matched file:</strong> {{ result.name }}</p>
-            <p><strong>Type:</strong> {{ result.type }}</p>
-            <p><strong>Overlap:</strong> {{ result.overlap }}</p>
-            <br>
-            <a href="/download_retrieved">Download Retrieved File</a>
-        </div>
+        <!-- Results -->
+        {% if results %}
+            {% for r in results %}
+            <div class="result-box result-set">
+                <p><strong>Query file:</strong>    {{ r.query_name }}</p>
+                <p><strong>Matched file:</strong>  {{ r.name }}</p>
+                <p><strong>Type:</strong>          {{ r.type }}</p>
+                <p><strong>Overlap:</strong>       {{ r.overlap }}</p>
+                <br>
+                <a href="/download_retrieved/{{ r.dl_index }}">
+                    Download "{{ r.name }}"
+                </a>
+            </div>
+            {% endfor %}
         {% endif %}
 
-    </div>
-</div>
-
-<script>
-    function updatePatternStats() {
-        const input = document.getElementById("sideLengthInput");
-        const side = Math.max(8, Math.min(256, parseInt(input.value) || 64));
-        const patternSize = side * side;
-
-        // Modern Hopfield capacity formula: N / (2 * ln(N))
-        const maxRecommendedFiles = Math.max(1, Math.floor(patternSize / (2 * Math.log(patternSize))));
-
-        document.getElementById("patternSizeText").textContent =
-            `${side}x${side} = ${patternSize.toLocaleString()}`;
-
-        document.getElementById("maxFiles").textContent =
-            `~${maxRecommendedFiles}`;
-    }
-
-    document.addEventListener("DOMContentLoaded", function () {
-        updatePatternStats();
-        document.getElementById("sideLengthInput").addEventListener("input", updatePatternStats);
-    });
-</script>
+    </div><!-- right-col -->
+</div><!-- container -->
 
 </body>
 </html>
